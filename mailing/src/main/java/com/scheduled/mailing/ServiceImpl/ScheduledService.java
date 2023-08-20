@@ -1,60 +1,123 @@
 package com.scheduled.mailing.ServiceImpl;
 
 import java.io.File;
+import java.io.FileNotFoundException;
+import java.io.FileOutputStream;
 import java.io.IOException;
+import java.io.StringReader;
+import java.text.SimpleDateFormat;
 import java.time.LocalDateTime;
+import java.util.Date;
+import java.util.List;
 
-import javax.mail.Message;
 import javax.mail.MessagingException;
-import javax.mail.Multipart;
-import javax.mail.internet.InternetAddress;
-import javax.mail.internet.MimeBodyPart;
 import javax.mail.internet.MimeMessage;
-import javax.mail.internet.MimeMultipart;
+import javax.xml.bind.JAXBContext;
+import javax.xml.bind.JAXBException;
+import javax.xml.bind.Unmarshaller;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.core.io.FileSystemResource;
-import org.springframework.mail.SimpleMailMessage;
 import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.mail.javamail.MimeMessageHelper;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
+import com.scheduled.mailing.dao.ScheduledMailDaoImpl;
+import com.scheduled.mailing.dto.Body;
+import com.scheduled.mailing.dto.ScheduledMail;
+
 @Component
 public class ScheduledService {
-	
+
 	@Autowired
 	private JavaMailSender mailSender;
-	
-	@Scheduled(fixedRate = 100000)
-	public void scheduledService() {
-		System.out.println("time : "+LocalDateTime.now());
-		this.sendEmail();
-	}
-	
-	public void sendEmail() {
+
+	@Autowired
+	private ScheduledMailDaoImpl em;
+
+	private static Unmarshaller unmarshaller;
+
+	static {
+		JAXBContext context;
 		try {
-		MimeMessage mimeMessage = mailSender.createMimeMessage();
-		MimeMessageHelper mimeMessageHelper = new MimeMessageHelper(mimeMessage, true);
-		
-		mimeMessageHelper.setFrom("dakshatasmetkari@gmail.com");
-		mimeMessageHelper.setTo("newtimicindia@gmail.com");
-		mimeMessageHelper.setText("Hi");
-		mimeMessageHelper.setSubject("Hi");
-		
-		FileSystemResource fileSystemResource = new FileSystemResource(
-				new File("D:\\documents\\113802054_ExamForm.pdf"));
-		mimeMessageHelper.addAttachment(fileSystemResource.getFilename(), fileSystemResource);
-		mailSender.send(mimeMessage);
-		System.out.println("mail sent");
-		
-		} catch (MessagingException e) {
-			// TODO Auto-generated catch block
+			context = JAXBContext.newInstance(Body.class);
+			unmarshaller = context.createUnmarshaller();
+		} catch (JAXBException e) {
 			e.printStackTrace();
 		}
-        
-		
-		System.out.println("mail sent at : "+LocalDateTime.now());
+
 	}
-	
+
+	@Scheduled(cron = "0 0 12 * * *")
+	public void scheduledService() {
+		System.out.println("time : " + LocalDateTime.now());
+		this.createScheduledMailBody();
+	}
+
+	public void sendEmail(ScheduledMail schMail, Body body, String path) {
+		try {
+			MimeMessage mimeMessage = mailSender.createMimeMessage();
+			MimeMessageHelper mimeMessageHelper = new MimeMessageHelper(mimeMessage, true);
+
+			mimeMessageHelper.setFrom(schMail.getSender());
+			mimeMessageHelper.setTo(schMail.getRecipient());
+			StringBuffer mailBody=new StringBuffer();
+			mailBody.append(body.getSalutation()+ "\n\n");
+			for(StringBuffer stanza : body.getStanzas()) {
+				mailBody.append(stanza + "\n");
+			}
+			mailBody.append("\n" +body.getComplimentaryClose() + "\n" + body.getSignature());
+			mimeMessageHelper.setText(mailBody.toString());
+			mimeMessageHelper.setSubject(body.getSubject());
+			if (path != null && !path.isEmpty()) {
+				FileSystemResource fileSystemResource = new FileSystemResource(new File(path));
+				mimeMessageHelper.addAttachment(fileSystemResource.getFilename(), fileSystemResource);
+			}
+			mailSender.send(mimeMessage);
+			System.out.println("mail sent");
+
+		} catch (MessagingException e) {
+			e.printStackTrace();
+		}
+
+		System.out.println("mail sent at : " + LocalDateTime.now());
+	}
+
+	public void createScheduledMailBody() {
+		Date date = new Date();
+		SimpleDateFormat dateFormat = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
+		String formattedDate = dateFormat.format(date);
+		List<ScheduledMail> list = em.getAllScheduledMails(formattedDate);
+
+		for (ScheduledMail schMail : list) {
+			try {
+				em.updateStatus(schMail.getId(), "In progress");
+				StringReader reader = new StringReader(schMail.getMailBody());
+				Body body = (Body) unmarshaller.unmarshal(reader);
+				if (schMail.getAttachment() != null) {
+					FileOutputStream fos;
+					try {
+						String path = "D:\\collection-app" + "\\" + schMail.getId() + ".zip";
+						fos = new FileOutputStream(path);
+						fos.write(schMail.getAttachment());
+						fos.flush();
+						fos.close();
+						this.sendEmail(schMail, body, path);
+						em.updateStatus(schMail.getId(), "Sent");
+					} catch (FileNotFoundException e) {
+						e.printStackTrace();
+					} catch (IOException e) {
+						e.printStackTrace();
+					}
+				} else {
+					this.sendEmail(schMail, body, null);
+					em.updateStatus(schMail.getId(), "Sent");
+				}
+			} catch (JAXBException e) {
+				e.printStackTrace();
+			}
+		}
+	}
+
 }
