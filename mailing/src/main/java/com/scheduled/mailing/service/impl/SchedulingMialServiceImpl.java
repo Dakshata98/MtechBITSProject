@@ -9,7 +9,9 @@ import java.io.StringReader;
 import java.io.StringWriter;
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
+import java.util.ArrayList;
 import java.util.Date;
+import java.util.List;
 
 import javax.xml.bind.JAXBContext;
 import javax.xml.bind.JAXBException;
@@ -26,6 +28,8 @@ import com.scheduled.mailing.dao.ScheduledMailDaoImpl;
 import com.scheduled.mailing.dto.Body;
 import com.scheduled.mailing.dto.Employee;
 import com.scheduled.mailing.dto.MailBody;
+import com.scheduled.mailing.dto.MailOutput;
+import com.scheduled.mailing.dto.MailOutputData;
 import com.scheduled.mailing.dto.MailingDTO;
 import com.scheduled.mailing.dto.ScheduledMail;
 import com.scheduled.mailing.dto.ScheduledMailOutput;
@@ -172,7 +176,7 @@ public class SchedulingMialServiceImpl implements SchedulingMailService {
 			output.setSender(mailData.getSender());
 			output.setRecipient(mailData.getRecipient());
 			output.setCreateDateTime(mailData.getCreateDateTime());
-			output.setLastUpdateDateTime(output.getLastUpdateDateTime());
+			output.setLastUpdateDateTime(mailData.getLastUpdateDateTime());
 			output.setScheduledDateTime(mailData.getScheduledDateTime());
 			output.setMailBody(body);
 			output.setAttachment(mailData.getAttachment());
@@ -182,6 +186,31 @@ public class SchedulingMialServiceImpl implements SchedulingMailService {
 			e.printStackTrace();
 		}
 		return null;
+	}
+
+	@Override
+	public MailOutput fetchUserMailData(String mailId) {
+		// TODO Auto-generated method stub
+		List<ScheduledMail> mails = em.getMails(mailId);
+		List<MailOutputData> mailsData = new ArrayList<>();
+		for(ScheduledMail mail : mails) {
+			MailOutputData mailOutput = new MailOutputData();
+			mailOutput.setId(mail.getId());
+			mailOutput.setRecipient(mail.getRecipient());
+			mailOutput.setScheduledDateTime(mail.getScheduledDateTime());
+			mailOutput.setStatus(mail.getStatus());
+			String xml=mail.getMailBody();
+			String startWord = "<subject>";
+	        String endWord = "</subject>";
+	        int startIndex = xml.indexOf(startWord) + startWord.length();
+	        int endIndex = xml.indexOf(endWord);
+	        mailOutput.setSubject(xml.substring(startIndex, endIndex).trim());
+			mailsData.add(mailOutput);
+		}
+		MailOutput mailResponse = new MailOutput();
+		mailResponse.setMailId(mailId);
+		mailResponse.setMails(mailsData);
+		return mailResponse;
 	}
 
 }

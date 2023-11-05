@@ -1,6 +1,7 @@
 package com.scheduled.mailing.rest;
 
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.web.bind.annotation.CrossOrigin;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -12,10 +13,12 @@ import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
 
 import com.scheduled.mailing.dto.Employee;
+import com.scheduled.mailing.dto.MailOutput;
 import com.scheduled.mailing.dto.MailingDTO;
 import com.scheduled.mailing.dto.ScheduledMailOutput;
 import com.scheduled.mailing.service.SchedulingMailService;
 
+@CrossOrigin(origins = "http://localhost:3000")
 @RestController
 @RequestMapping("/api/scheduling")
 public class SchedulingMailController {
@@ -46,6 +49,11 @@ public class SchedulingMailController {
 	@GetMapping("/fetchMailData")
 	public ScheduledMailOutput fetchMailData(@RequestParam Integer id) {
 		return SchedulingMailService.fetchMailData(id);
+	}
+	
+	@GetMapping("/fetchUserMailData")
+	public MailOutput fetchUserMailData(@RequestParam String mailId) {
+		return SchedulingMailService.fetchUserMailData(mailId);
 	}
 
 	@PostMapping("/createEmployee")
